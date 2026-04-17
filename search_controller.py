@@ -1020,7 +1020,7 @@ class SearchController:
             elif direction == Direction.UP:
                 self._driver.find_element(By.TAG_NAME, "body").send_keys(Keys.PAGE_UP)
 
-            sleep(get_random_sleep(1, 3) * config.behavior.wait_factor)
+            sleep(get_random_sleep(0.3, 0.7) * config.behavior.wait_factor)
 
         self._driver.find_element(By.TAG_NAME, "body").send_keys(Keys.HOME)
 

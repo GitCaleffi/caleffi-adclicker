@@ -25,7 +25,7 @@ except ImportError:
 from config_reader import config
 from geolocation_db import GeolocationDB
 from logger import logger
-from proxy import install_plugin
+from local_proxy import start_local_proxy
 from utils import get_location, get_locale_language, get_random_sleep
 
 
@@ -164,6 +164,10 @@ def create_webdriver(
     chrome_options.add_argument("--dns-prefetch-disable")
     chrome_options.add_argument("--allow-running-insecure-content")
     chrome_options.add_argument("--disable-search-engine-choice-screen")
+    chrome_options.add_argument("--disable-background-networking")   # blocca safe browsing + gvt1 CDN (~270 MB)
+    chrome_options.add_argument("--disable-sync")                     # no sync account Chrome
+    chrome_options.add_argument("--disable-component-update")         # no component auto-update
+    chrome_options.add_argument("--no-pings")                         # no hyperlink auditing pings
     chrome_options.add_argument(f"--user-agent={user_agent}")
 
     if IS_POSIX:
@@ -180,14 +184,21 @@ def create_webdriver(
         "PrivacySandboxSettings4",
         "UserAgentClientHint",
         "DisableLoadExtensionCommandLineSwitch",
+        "MediaRouter",                  # no Cast/media routing traffic
+        "Prerender2",                   # no page preloading in background
     ]
     chrome_options.add_argument(f"--disable-features={','.join(disabled_features)}")
 
-    # disable WebRTC IP tracking
+    # disable WebRTC IP tracking + block images/plugins/media to save bandwidth on residential proxies
     webrtc_preferences = {
         "webrtc.ip_handling_policy": "disable_non_proxied_udp",
         "webrtc.multiple_routes_enabled": False,
         "webrtc.nonproxied_udp_enabled": False,
+        "profile.managed_default_content_settings.images": 2,      # block images
+        "profile.managed_default_content_settings.plugins": 2,     # block plugins
+        "profile.managed_default_content_settings.media_stream": 2, # block camera/mic
+        "safebrowsing.enabled": False,                              # no safe browsing downloads
+        "safebrowsing.enhanced": False,                             # no enhanced protection
     }
     chrome_options.add_experimental_option("prefs", webrtc_preferences)
 
@@ -227,8 +238,8 @@ def create_webdriver(
             logger.info(f"Using proxy: {masked_proxy}")
             logger.debug(f"Using proxy: {proxy}")
 
-            install_plugin(chrome_options, host, int(port), username, password, plugin_folder_name)
-            sleep(2 * config.behavior.wait_factor)
+            local_port = start_local_proxy(host, int(port), username, password)
+            chrome_options.add_argument(f"--proxy-server=http://127.0.0.1:{local_port}")
         else:
             logger.info(f"Using proxy: {proxy}")
             chrome_options.add_argument(f"--proxy-server={proxy}")

@@ -1,8 +1,10 @@
 import random
 import subprocess
 import sys
+import threading
 import traceback
 from concurrent.futures import ProcessPoolExecutor, wait
+from datetime import datetime
 from itertools import cycle
 from pathlib import Path
 from time import sleep
@@ -13,6 +15,46 @@ from config_reader import config
 from logger import logger
 from proxy import get_proxies
 from utils import get_queries
+
+
+def _inside_running_interval() -> bool:
+    start_str = config.behavior.running_interval_start
+    end_str = config.behavior.running_interval_end
+    if start_str == "00:00" and end_str == "00:00":
+        return True
+    start = datetime.strptime(start_str, "%H:%M").time()
+    end = datetime.strptime(end_str, "%H:%M").time()
+    return start <= datetime.now().time() <= end
+
+
+def _persistent_worker(
+    browser_id: int,
+    queries: list,
+    proxy_cycle,
+    proxy_lock: threading.Lock,
+    device_id: Optional[str],
+) -> None:
+    """Persistent browser worker: restarts automatically after each session.
+    Each browser slot runs independently — no waiting for other browsers.
+    """
+    q_idx = browser_id - 1  # stagger initial query across browsers
+    while True:
+        if not _inside_running_interval():
+            logger.info(f"[Browser {browser_id}] Outside running interval. Waiting 60s...")
+            sleep(60)
+            continue
+
+        query = queries[q_idx % len(queries)]
+        q_idx += 1
+
+        with proxy_lock:
+            proxy = next(proxy_cycle)
+
+        start_tool(browser_id, query, proxy, start_timeout=0, device_id=device_id)
+
+        wait_time = config.behavior.loop_wait_time
+        logger.info(f"[Browser {browser_id}] Session complete. Restarting in {wait_time}s...")
+        sleep(wait_time)
 
 
 def start_tool(
@@ -87,23 +129,30 @@ def main() -> None:
 
     logger.info(f"Running with {MAX_WORKERS} browser{'s' if MAX_WORKERS > 1 else ''}...")
 
-    # 1st way - different query on each browser (default)
+    # 1st way - persistent pool: each browser restarts independently (default)
     if config.behavior.multiprocess_style == 1:
-        with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            futures = [
-                executor.submit(
-                    start_tool,
-                    i,
-                    next(query),
-                    next(proxy),
-                    start_timeout=i * 0.5,
-                    device_id=device_ids[i - 1],
-                )
-                for i in range(1, MAX_WORKERS + 1)
-            ]
+        proxy_lock = threading.Lock()
+        threads = [
+            threading.Thread(
+                target=_persistent_worker,
+                args=(i, queries, proxy, proxy_lock, device_ids[i - 1]),
+                daemon=True,
+                name=f"browser-{i}",
+            )
+            for i in range(1, MAX_WORKERS + 1)
+        ]
 
-            # wait for all tasks to complete
-            _, _ = wait(futures)
+        for i, t in enumerate(threads):
+            t.start()
+            sleep(0.5)  # stagger avoids race condition in chromedriver patching
+
+        try:
+            while True:
+                sleep(1)
+        except KeyboardInterrupt:
+            logger.info("Persistent pool interrupted by user.")
+        finally:
+            multi_browser_flag_file.unlink(missing_ok=True)
 
     # 2nd way - same query on each browser
     elif config.behavior.multiprocess_style == 2:

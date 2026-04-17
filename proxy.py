@@ -62,23 +62,22 @@ def install_plugin(
     manifest_json = """
 {
     "version": "1.0.0",
-    "manifest_version": 3,
+    "manifest_version": 2,
     "name": "Chrome Proxy Authentication",
     "background": {
-        "service_worker": "background.js"
+        "scripts": ["background.js"],
+        "persistent": true
     },
     "permissions": [
         "proxy",
         "tabs",
         "unlimitedStorage",
         "storage",
+        "<all_urls>",
         "webRequest",
-        "webRequestAuthProvider"
+        "webRequestBlocking"
     ],
-    "host_permissions": [
-        "<all_urls>"
-    ],
-    "minimum_chrome_version": "108"
+    "minimum_chrome_version": "76"
 }
 """
 

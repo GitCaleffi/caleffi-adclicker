@@ -1,109 +1,100 @@
-# Ad Clicker Premium for Google
+﻿# Ad Clicker – Caleffi Custom Build
 
-This command-line tool clicks ads for a certain query on Google search using [undetected_chromedriver](https://github.com/ultrafunkamsterdam/undetected-chromedriver) or [SeleniumBase](https://github.com/seleniumbase/SeleniumBase) packages. Supports proxy, running multiple simultaneous browsers, ad targeting/exclusion, and running in loop.
-
-### Features
-
-* 🛠️ Single config file for all options
-* 🖥️ Desktop UI for configuration and run
-* 🗑️ Clear cache and cookies on browser exit
-* 📄 External file for user agents
-* 🖼️ Set browser window size
-* 🎲 Shift browser windows by random offsets
-* 🌍 Set opening URL based on the proxy country
-* 🈵 Set browser language based on the proxy country
-* 🖱️ Random scrolls and mouse movements on pages
-* 🔗 Click non-ad links with domain filtering or in random
-* 🔄 Custom click order between ad and non-ad links
-* ⏱️ Set min/max waiting range for ad and non-ad pages
-* 📜 Limit max scroll on the search results page
-* 🍪 Use custom collected cookies
-* ⏳ Set the running interval time
-* 📊 Summary of statistics
-* 🛍️ Click on the top shopping ads up to 5
-* 🔐 2captcha integration
-* 📨 Telegram notification
-* 📝 Generate daily click report
-* 📱 Open found links on Android device
-* 🪝 Hooks for extending the tool with custom behavior
-* 🚀 Request boost
-* 💻 Remote control dashboard ([subscribe here](https://buy.stripe.com/00gdU8c3rg8KcUMdR7) - only for this feature) ([see how it works](https://vimeo.com/1072189164))
-
-    ![click report](assets/dashboard.png)
-
-<br>
-
-* Requires Python 3.9 to 3.11
-* Requires the latest Chrome version
-
----
-> Don't hesitate to give a ⭐ if you liked the project.
-
-> See [Support](#support) section below for more options to support.
----
-
-
-## How to setup
-
-> ⚙️ If you want a ready to use [EXE for Windows](https://vimeo.com/1126408117), you can [buy it here](https://buy.stripe.com/3cI6oIg2I9HK3lZcpu4Ni0k). This will also help support the project.
+Strumento di automazione per il clic su annunci Google, basato su [undetected_chromedriver](https://github.com/ultrafunkamsterdam/undetected-chromedriver). Supporta proxy residenziali con autenticazione, pool persistente di browser indipendenti, riduzione del consumo di banda e rilevamento della soppressione degli annunci da parte di Google.
 
 ---
 
-* Run the following commands in the project directory to install the required packages.
-    * `python -m venv env`
-    * `source env/bin/activate`
-    * `python -m pip install -r requirements.txt`
+## Requisiti
 
-<br>
+* Python 3.9 – 3.11
+* Chrome (versione più recente)
+* Proxy residenziali HTTP(S) con autenticazione `username:password@host:port`
 
-* To be able to use `pyautogui` for random mouse movements,
-    * MacOS needs the `pyobjc-core` and `pyobjc` modules installed (in that order)
+---
 
-    * You must install tkinter on Linux.
-        * `sudo apt install python3-tk python3-dev`
+## Setup
 
-    * Windows does not have additional dependency.
+```bash
+python -m venv env
+source env/bin/activate          # Linux/Mac
+env\Scripts\activate             # Windows
+python -m pip install -r requirements.txt
+```
 
-<br>
+Prima del primo avvio reale, eseguire una volta:
+```bash
+python ad_clicker.py -q test
+```
+Chiudere con CTRL+C dopo che il browser si apre.
 
-See [here](https://github.com/coskundeniz/ad_clicker/wiki/Setup-for-Windows) for setup on Windows.
+---
 
+## Avvio
 
-## How to run
+| Comando | Descrizione |
+|---|---|
+| `python run_in_loop.py` | **Avvio principale** – lancia il pool persistente e lo riavvia se termina inaspettatamente |
+| `python run_ad_clicker.py` | Avvia N browser in parallelo (singola tornata) |
+| `python ad_clicker.py` | Singolo browser, singola esecuzione |
+| `python ad_clicker.py --report_clicks` | Report clic del giorno corrente |
+| `python ad_clicker.py --report_clicks --date 17-04-2026` | Report per data specifica (formato DD-MM-YYYY) |
+| `python ad_clicker.py --report_clicks --excel` | Report con esportazione Excel |
 
-* Please read all the config option explanations and FAQ section before starting.
+---
 
-* You need to see `(env)` at the beginning of your command prompt that is showing virtual environment is activated.
+## Architettura del pool persistente
 
-* Before running the below commands for the first time, run `python ad_clicker.py -q test` once and end it by pressing CTRL+C after seeing the browser opened.
+Con `multiprocess_style=1` ogni browser gira in un thread indipendente (non in un ProcessPoolExecutor). Ciò significa:
 
-* Run `python ad_clicker.py` for a single run with single browser.
-* Run `python run_ad_clicker.py` for a single run with multiple browsers.
-* Run `python run_in_loop.py` for running in loop with either single or multiple browsers.
-* Run `python gui.py` for opening the following ui to configure/run.
+- Ogni browser riavvia la propria sessione non appena termina, senza aspettare gli altri
+- Il `loop_wait_time` (secondi di pausa tra una sessione e la successiva) è per-browser
+- `run_in_loop.py` monitora `run_ad_clicker.py` e lo riavvia se crasha
+- L'intervallo orario (`running_interval_start` / `running_interval_end`) è gestito dentro `run_ad_clicker.py`
 
-    ![gui](assets/ad_clicker_gui.png)
+---
 
-* Run `python ad_clicker.py --report_clicks` for generating click report.
-* Run `python ad_clicker.py --report_clicks --date` for generating click report for the given date in DD-MM-YYYY format.
-* Run `python ad_clicker.py --report_clicks --excel` for generating click report and writing results to an Excel file.
+## Logica di clic – click_order 6
 
-    * Example report
-    ![click report](assets/click_report.png)
+Con `click_order=6` ogni sessione punta a **6 clic totali** su annunci:
 
-<br>
+1. Vengono cliccati immediatamente gli annunci Shopping in cima alla pagina (fino a 5)
+2. Vengono cliccati gli annunci di testo trovati nella ricerca iniziale
+3. Se il totale è ancora sotto 6, si apre una nuova scheda con una query diversa e si ripete
+4. Condizioni di stop anticipato:
+   - `MAX_TAB_RETRIES = 3` – massimo 3 nuove schede aggiuntive per sessione
+   - `MAX_CONSECUTIVE_MISS = 2` – se 2 ricerche consecutive restituiscono 0 annunci, la sessione viene tagliata ("Google sta sopprimendo gli annunci")
 
-### Config Options
+---
 
-All options can be set in the `config.json` file in the project directory.
+## Riduzione del consumo di banda
 
-The followings are the default values in the config file.
+Flag Chrome aggiuntivi attivi per default:
+
+| Flag / Impostazione | Risparmio stimato |
+|---|---|
+| `--disable-background-networking` | ~270 MB/giorno |
+| `--disable-sync` | riduce traffico account Google |
+| `--disable-component-update` | elimina download aggiornamenti componenti |
+| `--no-pings` | elimina ping di navigazione |
+| `MediaRouter`, `Prerender2` disabilitati | riduce connessioni inutili |
+| `safebrowsing.enabled = false` | elimina chiamate a safebrowsing.googleapis.com (~169 MB/giorno) |
+| Immagini bloccate (`managed_default_content_settings.images = 2`) | risparmio significativo su proxy residenziali |
+
+---
+
+## Proxy con tunnel locale (local_proxy.py)
+
+Per proxy che richiedono autenticazione HTTPS (es. IPRoyal), `local_proxy.py` crea un tunnel locale `127.0.0.1:PORTA` verso il proxy remoto iniettando automaticamente l'header `Proxy-Authorization`. In questo modo Chrome non necessita di estensioni per l'autenticazione.
+
+---
+
+## Config (config.json)
 
 ```json
 {
     "paths": {
-        "query_file": "/home/coskun/queries.txt",
-        "proxy_file": "/home/coskun/proxies.txt",
+        "query_file": "queries general.txt",
+        "proxy_file": "proxies.txt",
         "user_agents": "user_agents.txt",
         "filtered_domains": "domains.txt"
     },
@@ -125,17 +116,17 @@ The followings are the default values in the config file.
         "nonad_page_min_wait": 15,
         "nonad_page_max_wait": 20,
         "max_scroll_limit": 0,
-        "check_shopping_ads": true,
+        "check_shopping_ads": false,
         "excludes": "",
         "random_mouse": false,
-        "custom_cookies": false,
-        "click_order": 5,
-        "browser_count": 2,
+        "custom_cookies": true,
+        "click_order": 6,
+        "browser_count": 7,
         "multiprocess_style": 1,
-        "loop_wait_time": 60,
+        "loop_wait_time": 5,
         "wait_factor": 1.0,
-        "running_interval_start": "00:00",
-        "running_interval_end": "00:00",
+        "running_interval_start": "08:00",
+        "running_interval_end": "23:59",
         "2captcha_apikey": "",
         "hooks_enabled": false,
         "telegram_enabled": false,
@@ -145,252 +136,59 @@ The followings are the default values in the config file.
 }
 ```
 
-* **query_file**: File path to read queries to search. Used with `run_ad_clicker.py` and `run_in_loop.py`. Put a query for each line.
-
-* **proxy_file**: File path to read proxies. Put a proxy for each line.
-
-* **user_agents**: File path to read user agents. Default value is `user_agents.txt`.
-
-* **filtered_domains**: File path to read domains to filter for clicking non-ad links. Default value is `domains.txt` in the project directory. If you don't want to filter non-ad domains, simply leave the `domains.txt` file empty and 3 links will be randomly selected.
-
-* **proxy**: Use the given proxy with `ad_clicker.py`. The `proxy_file` and `proxy` parameters can not have a value at the same time.
-
-* **auth**: Use proxy with username and password. If this is `true`, your proxies should be in `username:password@host:port` format
-
-    > **Important Note:** Starting from Chrome 142, Google removed `--load-extension` argument that disables the ability to install
-        plugins programmatically. Please make this parameter `false` and use your proxies in `IP:PORT` format with ip authentication
-        method by whitelisting your IP on your proxy provider. Otherwise, you won't be able to use authenticated proxies.
-
-* **incognito**: Run in incognito mode. Note that the proxy extension is not enabled in `incognito` mode.
-
-* **country_domain**: Set opening URL based on the proxy country.
-
-* **language_from_proxy**: Set browser locale language based on the proxy country.
-
-* **ss_on_exception**: Enable taking screenshot in case of an exception.
-
-* **window_size**: Set browser window size as `width,height` px.
-
-* **shift_windows**: Shift browser windows by randomly selected x,y offsets.
-    * If you are using a display zoom other than 100%, use this together with `window_size` option.
-    * If a custom `window_size` is given, it is used to determine a new widthxheight for the window. Otherwise, screen resolution is used.
-
-* **use_seleniumbase**: Use SeleniumBase with UC mode instead of undetected_chromedriver.
-
-* **query**: Search query. The `query_file` and `query` parameters can not have a value at the same time.
-    * A query like "wireless speaker@amazon#ebay  # mediamarkt" searches for "wireless speaker" and click links that include the given filter words in url or title.
-
-    * Spaces around "@" and "#" are ignored, so both "wireless speaker@amazon#ebay" and
-    "wireless speaker @ amazon  # ebay" take "wireless speaker" as search query and "amazon" and "ebay" as filter words.
-
-    * If you will give a target domain as filter word, don't use "http" or "www" parts in it. Use like "query@domainname.com" or even "query@domainname". Keep it as short as possible to get a match.
-
-* **ad_page_min_wait**: Number of minimum seconds to wait on the ad page. The value is randomly selected between the min/max ranges.
-* **ad_page_max_wait**: Number of maximum seconds to wait on the ad page. The value is randomly selected between the min/max ranges.
-* **nonad_page_min_wait**: Number of minimum seconds to wait on the non-ad page. The value is randomly selected between the min/max ranges.
-* **nonad_page_max_wait**: Number of maximum seconds to wait on the non-ad page. The value is randomly selected between the min/max ranges.
-
-* **max_scroll_limit**: Number of maximum scrolls on the search results page. It will scroll until the end of the page by default(0).
-
-* **check_shopping_ads**: Enable checking and clicking shopping ads seen on top up to 5 if exists. It is more likely to see shopping ads if you use residential proxies.
-
-* **excludes**: Exclude the ads that contain given words in url or title.
-    * A value like "amazon.com,mediamarkt.com,for 2022,Soundbar" click links except the ones containing the given words in url or title.
-    * Separate multiple exclude items with comma.
-
-* **random_mouse**: Enable random mouse movements on pages.
-
-* **custom_cookies**: Use custom collected cookies. They should be put into `cookies.txt` file in the project directory.
-
-* **click_order**: Click order for ad and non-ad links found
-    * 1: click all non-ad links first, then click ad links
-    * 2: click all ad links first, then non-ad links
-    * 3: click 1 non-ad, then 1 ad, then all remaining non-ads, finally all remaining ads
-    * 4: click 1 non-ad, then 1 ad on each round
-    * 5: shuffle ad and non-ad links and click whichever order is created (default)
-
-* **browser_count**: Maximum number of browsers to run concurrently. Used with `run_ad_clicker.py` and `run_in_loop.py`.
-    * If the value is 0, the number of cpu cores is used.
-
-* **multiprocess_style**: Style of the multiprocess run. Used with `run_ad_clicker.py` and `run_in_loop.py`.
-    * 1: different query on each browser (default)
-        * e.g. First, queries in the file are shuffled. Then, 5 browsers search the first 5 queries from the file.
-    * 2: same query on each browser
-        * e.g. 5 browsers search the first query from file. After they are completed, second group of 5 browsers search the second query and so on.
-
-    * If the number of queries or proxies are less than the number of browsers to run, they are cycled.
-    * If *multiprocess_style* is 1, queries read from the file are shuffled.
-
-* **loop_wait_time**: Wait time between runs in seconds. Default is 60. Used with `run_in_loop.py`.
-
-* **wait_factor**: Wait factor to modify all sleeps except loop wait. The default value is 1.0.
-    * For example, if you want to decrease waits by half, you can set this to 0.5, or if you want to increase them by 30%, you can use this as 1.3.
-    * Note that especially with decreasing, it can make the tool faster but can not guarantee proper functioning.
-
-* **running_interval_start**: Running interval start in "HH:MM" format. Used with `run_in_loop.py`.
-    * If the current time is outside of the interval, it waits the start time to run again.
-* **running_interval_end**: Running interval end in "HH:MM" format. Used with `run_in_loop.py`.
-    * Difference between start and end time must be at least 10 minutes.
-    * If both start and end is "00:00"(default), no interval check is done.
-
-* **2captcha_apikey**: API key for 2captcha service.
-    * Note that this is a 3rd party service, so you need to [register with it](https://2captcha.com/?from=18906047) to get an API key.
-
-* **hooks_enabled**: Enable hooks for extending the tool with custom behavior.
-    * You can implement the functions in the `hooks.py` module as your need.
-    * Any errors coming from your custom implementation will be in your responsibility.
-    * Installing additional 3rd-party packages used in your implementation is in your responsibility.
-
-* **telegram_enabled**: Enable Telegram notifications.
-    * You will get a message like below.
-
-        ![telegram_message](assets/telegram_message.png)
-
-    * There is a limit of 2048 characters. If the length of the message exceeds this, it will be truncated.
-
-* **send_to_android**: Send links to open on connected Android mobile device. Used with `run_ad_clicker.py` and `run_in_loop.py`.
-
-    * Note that mobile device must be connected to the same wireless network or directly via USB cable for one of these usages.
-
-    * If you have less devices(n) than browsers you run, first n browsers will be assigned to n devices.
-
-    * ADB setup steps
-        1. Open your phone’s **Settings**.
-        2. Scroll down to **About phone**.
-        3. Find **Build number** (usually under Software Information).
-        4. Tap Build number 7 times. You should see a message like "You are now a developer!"
-        5. Go back to Settings, and you will now see a **Developer options** menu.
-        6. Open **Developer options** and enable **USB Debugging**.
-
-        7. Install ADB on your computer
-            * `sudo apt install adb`
-
-            * See [here](https://www.xda-developers.com/install-adb-windows-macos-linux/) or [here](https://www.howtogeek.com/125769/how-to-install-and-use-abd-the-android-debug-bridge-utility/) for Windows.
-
-        8. Verify installation
-            * `adb version`
-
-        9. Connect your phone to your computer via USB.
-            * When prompted on your device, select Allow USB Debugging.
-
-        10. Check if ADB recognizes your device by running `adb devices`.
-            * If you see your device’s ID, the connection is successful.
-
-    * You can also use ADB wirelessly without a USB cable.
-
-        1. Connect your phone to your computer via USB and enable USB Debugging as explained before.
-        2. Run the following command.
-            * `adb tcpip 5555`
-
-        3. Disconnect the USB cable and find the phone’s IP address (Settings > About phone > Status).
-        4. Connect ADB to your phone wirelessly.
-            * `adb connect <phone_ip>:5555`
-
-    * Watch an example run
-
-        [![Send to Android](assets/send_to_android_cover.png)](https://vimeo.com/1072189351)
-
-* **request_boost**: Send 10 parallel requests to the link clicked with different IPs in addition to the browser click.
-
-    * Note that this can cause bans due to number of requests sent in a short period.
-
-<br>
-
-### Enable Telegram Notification
-
-Apply the following steps for once to enable Telegram notifications.
-
-1. Create your own Telegram bot using the [BotFather](https://t.me/BotFather).
-2. Set `TELEGRAM_TOKEN` environment variable with your own token received from the BotFather. You can see the instructions to set environment variables [here for Linux](https://phoenixnap.com/kb/linux-set-environment-variable), [here for Windows](https://phoenixnap.com/kb/windows-set-environment-variable), and [here for Mac](https://phoenixnap.com/kb/set-environment-variable-mac).
-3. Run `python ad_clicker.py --enable_telegram`
-4. Open [https://t.me/<your_bot_name>]()
-5. Send `/start` command.
-6. End script by pressing CTRL+C.
-
-<br>
-
-## Execution Example
-
-[Watch recording of an execution](https://vimeo.com/1072188364)
-
-<br>
-
-## FAQ
-
-<details>
-  <summary><b>Which are the supported platforms?</b></summary>
-    You can run the tool on Linux(recommended) and Windows.
-</details>
-
-<details>
-  <summary><b>Does it have a UI?</b></summary>
-    Yes, it has a desktop ui. This is a command-line tool but it just requires a simple command to start. All options can be set in a config file easily.
-</details>
-
-<details>
-  <summary><b>What kind of proxies are supported?</b></summary>
-    It supports IPv4 http proxies.
-</details>
-
-<details>
-  <summary><b>How many browsers can I run simultaneously?</b></summary>
-    It depends on your configuration and system properties. You can run as much as your number of cpu cores. I recommend (cpu core - 1) as maximum.
-</details>
-
-<details>
-  <summary><b>How many clicks does it make per minute/hour?</b></summary>
-    It depends on your configuration.
-</details>
-
-<details>
-  <summary><b>Can I send hundreds of clicks in a few minutes?</b></summary>
-    No, you can't. The goal of the tool is to become as close as possible to human behavior.
-</details>
-
-<details>
-  <summary><b>What happens if there is captcha shown?</b></summary>
-    The tool has 2captcha integration. If you register for a 2captcha account, captcha is solved using it.
-</details>
-
-<details>
-  <summary><b>What should I do if I need customization or support?</b></summary>
-    Please see the support section below.
-</details>
-
-<br>
-
-## Troubleshooting
-
-#### 1. ValueError: max() arg is an empty sequence
-
-* If you see this error, run the following commands.
-
-    1. Delete `.MULTI_BROWSERS_IN_USE` file if exists.
-        * `rm .MULTI_BROWSERS_IN_USE` for Linux or `del .MULTI_BROWSERS_IN_USE` for Windows.
-
-    2. Run `python ad_clicker.py -q test` and end it by pressing CTRL+C after seeing the browser opened.
-
-    3. Continue with one of the commands from [How to run](#how-to-run) section.
-
-#### 2. Chrome version mismatch error
-
-* If you get an error like **"This version of ChromeDriver only supports Chrome version ... Current browser version is ..."**, it means you are using an older Chrome version and should update to the latest one.
-
-* You may need to apply [solution from the previous section](#1-valueerror-max-arg-is-an-empty-sequence) for some cases.
-
-<br>
-
-## Support
-
-[https://coskundeniz.github.io/ad_clicker](https://coskundeniz.github.io/ad_clicker)
-
-If you benefit from this tool, please give a star and consider donating using the sponsor links([patreon](https://patreon.com/ritimdarbuka), [ko-fi](https://ko-fi.com/coskundeniz)) or the following crypto addresses.
-
-* ETH: 0x461c1B3bd9c3E2d949C56670C088465Bf3457F4B
-* USDT: 0x1a4f06937100Dc704031386667D731Bea0670aaf
+### Parametri principali
+
+* **query_file** – File con le query di ricerca (una per riga). Con `multiprocess_style=1` le query vengono mescolate e ogni browser usa una query diversa.
+* **proxy_file** – File con i proxy (formato `user:pass@host:port`).
+* **auth** – Proxy con autenticazione username/password.
+* **check_shopping_ads** – Abilita il clic sugli annunci Shopping in cima alla pagina (fino a 5).
+* **click_order** – Ordine di clic (vedere sezione dedicata sopra per il valore `6`).
+* **browser_count** – Numero di browser in parallelo.
+* **multiprocess_style** – `1` = query diversa per ogni browser (pool persistente); `2` = stessa query su tutti.
+* **loop_wait_time** – Secondi di pausa tra una sessione e la successiva (per browser).
+* **running_interval_start / running_interval_end** – Finestra oraria di attivita (formato HH:MM).
+* **custom_cookies** – Usa i cookie personalizzati da `cookies.txt`.
+* **wait_factor** – Moltiplicatore globale per tutti i tempi di attesa (0.5 = dimezza i tempi).
+* **max_scroll_limit** – Numero massimo di scroll sulla pagina dei risultati (0 = fino in fondo).
+* **excludes** – Parole chiave per escludere annunci (separate da virgola).
+* **random_mouse** – Movimenti random del mouse sulle pagine.
+* **2captcha_apikey** – Chiave API per la risoluzione automatica del captcha via 2captcha.
+* **hooks_enabled** – Abilita hook personalizzati in `hooks.py`.
+* **telegram_enabled** – Notifiche Telegram (configurare `TELEGRAM_TOKEN` come variabile d'ambiente).
+* **request_boost** – Invia 10 richieste parallele con IP diversi ad ogni link cliccato.
 
 ---
 
-* Support project by buying it once [here](https://buy.stripe.com/4gw6rGffD3lYdYQ4gu).
+## Report clic
 
-* Support project by monthly subscription($10/month) [here](https://buy.stripe.com/aFa9AU5o44nq6yb9di4Ni0i).
+I clic vengono salvati in `clicklogs.db` (SQLite). Colonne: `id`, `click_date` (DD-MM-YYYY), `click_time` (HH:MM:SS), `site_url`, `query`, `category`.
+
+```bash
+python ad_clicker.py --report_clicks
+python ad_clicker.py --report_clicks --date 14-04-2026
+python ad_clicker.py --report_clicks --excel
+```
+
+---
+
+## Troubleshooting
+
+### ValueError: max() arg is an empty sequence
+
+1. Eliminare il file `.MULTI_BROWSERS_IN_USE` se esiste.
+2. Eseguire `python ad_clicker.py -q test` e chiudere con CTRL+C.
+3. Riprendere con `python run_in_loop.py`.
+
+### Chrome version mismatch
+
+Aggiornare Chrome all'ultima versione disponibile, quindi ripetere il punto 2 del troubleshooting precedente.
+
+---
+
+## Notifiche Telegram
+
+1. Creare un bot con [BotFather](https://t.me/BotFather).
+2. Impostare la variabile d'ambiente `TELEGRAM_TOKEN` con il token ricevuto.
+3. Eseguire `python ad_clicker.py --enable_telegram`.
+4. Aprire `https://t.me/<nome_bot>` e inviare `/start`.
+5. Chiudere con CTRL+C.

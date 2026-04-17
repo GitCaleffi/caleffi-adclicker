@@ -182,84 +182,117 @@ def main():
         if config.behavior.hooks_enabled:
             hooks.after_search_hook(driver)
 
-        # Click order 6: text ads priority - retry with up to 2 different queries if none found
         if config.behavior.click_order == 6:
-            if not ads:
-                all_queries = get_queries()
-                other_queries = [q.strip() for q in all_queries if q.strip().lower() != query.strip().lower()]
-                random.shuffle(other_queries)
-                retry_queries = other_queries[:2]  # try up to 2 different queries
+            # ── CLICK ORDER 6: target 6 text ad clicks per session ────────────────
+            TARGET = 6
+            _all_queries = get_queries()
+            _other_queries = [q.strip() for q in _all_queries if q.strip().lower() != query.strip().lower()]
+            random.shuffle(_other_queries)
 
-                # Track most recent shopping ads (current tab = fresh WebElements, never stale)
-                last_shopping = shopping_ads[:]
+            # 1) Shopping ads PRIMA di qualsiasi cambio tab (WebElement freschi)
+            if shopping_ads:
+                logger.info(f"Click order 6: clicking {len(shopping_ads[:6])} shopping ads...")
+                search_controller.click_shopping_ads(shopping_ads[:6])
 
-                for retry_query in retry_queries:
-                    logger.info(f"No text ads for '{query}'. Opening new tab for '{retry_query}'...")
-                    search_controller.set_query(retry_query, open_new_tab=True)
-                    retry_ads, retry_non_ad_links, retry_shopping = search_controller.search_for_ads()
-                    # Always update to freshest tab's elements (avoids stale WebElements)
-                    if retry_shopping:
-                        last_shopping = retry_shopping
-                    if retry_ads:
-                        ads = retry_ads
-                        non_ad_links = retry_non_ad_links
-                        break  # found text ads, stop retrying
+            # 2) Clicca text ads della ricerca iniziale
+            total_ad_clicks = 0
+            if ads:
+                search_controller.click_links(ads)
+                total_ad_clicks = len(ads)
+                logger.info(f"Click order 6: {total_ad_clicks}/{TARGET} after initial search")
 
-                # Use freshest shopping ads (max 6), always click alongside text ads
-                shopping_ads = last_shopping[:6]
-            else:
-                # Initial search found text ads - cap shopping at 6
-                shopping_ads = shopping_ads[:6]
-
-        if not (ads or shopping_ads):
-            logger.info("No ads found in the search results!")
-
-            if config.behavior.telegram_enabled:
-                notify_matching_ads(query, links=None, stats=search_controller.stats)
-        else:
-            logger.debug(f"Selected click order: {config.behavior.click_order}")
-
-            if config.behavior.click_order == 6:
-                # Text ads + shopping ads (max 6 shopping, always alongside)
-                logger.info(f"Click order 6: {len(ads)} text ads + {len(shopping_ads)} shopping ads")
-                all_links = ads
-
-            elif config.behavior.click_order == 1:
-                all_links = non_ad_links + ads
-
-            elif config.behavior.click_order == 2:
-                all_links = ads + non_ad_links
-
-            elif config.behavior.click_order == 3:
-                if non_ad_links:
-                    all_links = [non_ad_links[0]] + [ads[0]] + non_ad_links[1:] + ads[1:]
-                else:
-                    logger.debug("Couldn't found non-ads! Continue with ads only.")
-                    all_links = ads
-
-            elif config.behavior.click_order == 4:
-                all_links = list(
-                    filterfalse(
-                        lambda x: not x, chain.from_iterable(zip_longest(non_ad_links, ads))
-                    )
+            # 3) Apri nuovi tab con query diverse finché non raggiungiamo TARGET
+            MAX_TAB_RETRIES = 3       # max nuovi tab per sessione
+            MAX_CONSECUTIVE_MISS = 2  # se X ricerche di fila senza ads → Google ha bloccato l'IP, taglia
+            retry_idx = 0
+            tab_count = 0
+            consecutive_miss = 0
+            while total_ad_clicks < TARGET and retry_idx < len(_other_queries) and tab_count < MAX_TAB_RETRIES:
+                retry_query = _other_queries[retry_idx]
+                retry_idx += 1
+                tab_count += 1
+                remaining = TARGET - total_ad_clicks
+                logger.info(
+                    f"Click order 6: {total_ad_clicks}/{TARGET} text clicks — "
+                    f"opening new tab for '{retry_query}' (tab {tab_count}/{MAX_TAB_RETRIES})..."
                 )
+                search_controller.set_query(retry_query, open_new_tab=True)
+                retry_ads, _, _ = search_controller.search_for_ads()
+                if retry_ads:
+                    search_controller.click_links(retry_ads[:remaining])
+                    total_ad_clicks += len(retry_ads[:remaining])
+                    consecutive_miss = 0  # reset: ads trovati
+                else:
+                    consecutive_miss += 1
+                    logger.info(
+                        f"Click order 6: no ads for '{retry_query}' "
+                        f"({consecutive_miss}/{MAX_CONSECUTIVE_MISS} consecutive misses)"
+                    )
+                    if consecutive_miss >= MAX_CONSECUTIVE_MISS:
+                        logger.info(
+                            "Click order 6: too many consecutive misses — "
+                            "Google likely suppressing ads for this IP. Cutting session."
+                        )
+                        break
 
+            if total_ad_clicks == 0 and not shopping_ads:
+                logger.info("No ads found in the search results!")
             else:
-                all_links = ads + non_ad_links
-                random.shuffle(all_links)
-
-            logger.info(f"Found {len(ads) + len(shopping_ads)} ads")
-
-            search_controller.click_shopping_ads(shopping_ads)
-            search_controller.click_links(all_links)
+                logger.info(f"Click order 6 completed: {total_ad_clicks}/{TARGET} text ad clicks")
 
             if config.behavior.hooks_enabled:
                 hooks.after_clicks_hook(driver)
 
             if config.behavior.telegram_enabled:
-                notify_matching_ads(query, links=ads + shopping_ads, stats=search_controller.stats)
+                notify_matching_ads(query, links=ads, stats=search_controller.stats)
 
             logger.info(search_controller.stats)
+
+        else:
+            if not (ads or shopping_ads):
+                logger.info("No ads found in the search results!")
+
+                if config.behavior.telegram_enabled:
+                    notify_matching_ads(query, links=None, stats=search_controller.stats)
+            else:
+                logger.debug(f"Selected click order: {config.behavior.click_order}")
+
+                if config.behavior.click_order == 1:
+                    all_links = non_ad_links + ads
+
+                elif config.behavior.click_order == 2:
+                    all_links = ads + non_ad_links
+
+                elif config.behavior.click_order == 3:
+                    if non_ad_links:
+                        all_links = [non_ad_links[0]] + [ads[0]] + non_ad_links[1:] + ads[1:]
+                    else:
+                        logger.debug("Couldn't found non-ads! Continue with ads only.")
+                        all_links = ads
+
+                elif config.behavior.click_order == 4:
+                    all_links = list(
+                        filterfalse(
+                            lambda x: not x, chain.from_iterable(zip_longest(non_ad_links, ads))
+                        )
+                    )
+
+                else:
+                    all_links = ads + non_ad_links
+                    random.shuffle(all_links)
+
+                logger.info(f"Found {len(ads) + len(shopping_ads)} ads")
+
+                search_controller.click_shopping_ads(shopping_ads)
+                search_controller.click_links(all_links)
+
+                if config.behavior.hooks_enabled:
+                    hooks.after_clicks_hook(driver)
+
+                if config.behavior.telegram_enabled:
+                    notify_matching_ads(query, links=ads + shopping_ads, stats=search_controller.stats)
+
+                logger.info(search_controller.stats)
 
     except Exception as exp:
         logger.error("Exception occurred. See the details in the log file.")

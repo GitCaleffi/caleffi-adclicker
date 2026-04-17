@@ -47,18 +47,12 @@ def main() -> None:
         # command line mode: run the script like before
         command = [sys.executable, "run_ad_clicker.py"]
 
+    # run_ad_clicker.py now manages its own persistent pool internally.
+    # It runs until killed — if it exits unexpectedly, we restart it.
     while True:
-
-        if not _inside_running_interval():
-            start_time = config.behavior.running_interval_start
-            logger.info(f"Outside of the running interval. Waiting {start_time} to start...")
-            sleep(60)
-            continue
-
         subprocess.run(command)
-
-        logger.info(f"Sleeping {config.behavior.loop_wait_time} seconds...")
-        sleep(config.behavior.loop_wait_time)
+        logger.info("run_ad_clicker exited unexpectedly. Restarting in 10s...")
+        sleep(10)
 
 
 if __name__ == "__main__":
