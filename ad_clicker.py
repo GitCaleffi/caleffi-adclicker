@@ -183,27 +183,29 @@ def main():
             hooks.after_search_hook(driver)
 
         if config.behavior.click_order == 6:
-            # ── CLICK ORDER 6: target 6 text ad clicks per session ────────────────
+            # ── CLICK ORDER 6 ─────────────────────────────────────────────────────
+            # Ordine di priorità:
+            # 1) Text ads dalla ricerca iniziale
+            # 2) Apri fino a 3 tab aggiuntivi cercando text ads → raccogli anche shopping ads
+            # 3) Dopo i tab, clicca TUTTI gli shopping ads raccolti da tutte le pagine
             TARGET = 6
             _all_queries = get_queries()
             _other_queries = [q.strip() for q in _all_queries if q.strip().lower() != query.strip().lower()]
             random.shuffle(_other_queries)
 
-            # 1) Shopping ads PRIMA di qualsiasi cambio tab (WebElement freschi)
-            if shopping_ads:
-                logger.info(f"Click order 6: clicking {len(shopping_ads[:6])} shopping ads...")
-                search_controller.click_shopping_ads(shopping_ads[:6])
+            # Accumula tutti gli shopping ads trovati in tutte le pagine
+            all_shopping_ads = list(shopping_ads) if shopping_ads else []
 
-            # 2) Clicca text ads della ricerca iniziale
+            # 1) Text ads della ricerca iniziale
             total_ad_clicks = 0
             if ads:
                 search_controller.click_links(ads)
                 total_ad_clicks = len(ads)
                 logger.info(f"Click order 6: {total_ad_clicks}/{TARGET} after initial search")
 
-            # 3) Apri nuovi tab con query diverse finché non raggiungiamo TARGET
+            # 2) Apri nuovi tab cercando text ads, accumula shopping ads
             MAX_TAB_RETRIES = 3       # max nuovi tab per sessione
-            MAX_CONSECUTIVE_MISS = 2  # se X ricerche di fila senza ads → Google ha bloccato l'IP, taglia
+            MAX_CONSECUTIVE_MISS = 2  # se X ricerche di fila senza nulla → IP bloccato, taglia
             retry_idx = 0
             tab_count = 0
             consecutive_miss = 0
@@ -218,20 +220,17 @@ def main():
                 )
                 search_controller.set_query(retry_query, open_new_tab=True)
                 retry_ads, _, retry_shopping_ads = search_controller.search_for_ads()
-                found_something = False
+
+                # Accumula shopping ads da questo tab
+                if retry_shopping_ads:
+                    all_shopping_ads.extend(retry_shopping_ads)
+
                 if retry_ads:
                     search_controller.click_links(retry_ads[:remaining])
                     total_ad_clicks += len(retry_ads[:remaining])
-                    found_something = True
-                if retry_shopping_ads:
-                    logger.info(
-                        f"Click order 6: clicking {len(retry_shopping_ads)} shopping ads for '{retry_query}'..."
-                    )
-                    search_controller.click_shopping_ads(retry_shopping_ads)
-                    found_something = True
-                if found_something:
                     consecutive_miss = 0
-                else:
+                elif not retry_shopping_ads:
+                    # Nessun ad di nessun tipo → conta come miss
                     consecutive_miss += 1
                     logger.info(
                         f"Click order 6: no ads for '{retry_query}' "
@@ -243,11 +242,18 @@ def main():
                             "Google likely suppressing ads for this IP. Cutting session."
                         )
                         break
+                else:
+                    consecutive_miss = 0  # trovati shopping ads, IP non bloccato
 
-            if total_ad_clicks == 0 and not shopping_ads:
+            # 3) Clicca TUTTI gli shopping ads raccolti da tutte le pagine
+            if all_shopping_ads:
+                logger.info(f"Click order 6: clicking {len(all_shopping_ads)} shopping ads collected across all tabs...")
+                search_controller.click_shopping_ads(all_shopping_ads)
+
+            if total_ad_clicks == 0 and not all_shopping_ads:
                 logger.info("No ads found in the search results!")
             else:
-                logger.info(f"Click order 6 completed: {total_ad_clicks}/{TARGET} text ad clicks")
+                logger.info(f"Click order 6 completed: {total_ad_clicks}/{TARGET} text ad clicks, {len(all_shopping_ads)} shopping ads clicked")
 
             if config.behavior.hooks_enabled:
                 hooks.after_clicks_hook(driver)
