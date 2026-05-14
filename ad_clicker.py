@@ -217,11 +217,18 @@ def main():
                     f"opening new tab for '{retry_query}' (tab {tab_count}/{MAX_TAB_RETRIES})..."
                 )
                 search_controller.set_query(retry_query, open_new_tab=True)
-                retry_ads, _, _ = search_controller.search_for_ads()
+                retry_ads, _, retry_shopping_ads = search_controller.search_for_ads()
                 if retry_ads:
                     search_controller.click_links(retry_ads[:remaining])
                     total_ad_clicks += len(retry_ads[:remaining])
                     consecutive_miss = 0  # reset: ads trovati
+                elif retry_shopping_ads:
+                    logger.info(
+                        f"Click order 6: no text ads for '{retry_query}', "
+                        f"clicking {len(retry_shopping_ads[:remaining])} shopping ads instead..."
+                    )
+                    search_controller.click_shopping_ads(retry_shopping_ads[:remaining])
+                    consecutive_miss = 0  # reset: shopping ads trovati
                 else:
                     consecutive_miss += 1
                     logger.info(
