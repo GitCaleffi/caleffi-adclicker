@@ -108,14 +108,14 @@ def main() -> None:
         if config.behavior.multiprocess_style == 1:
             random.shuffle(queries)
 
-        query = cycle(queries) if len(queries) <= MAX_WORKERS else iter(queries)
+        query = cycle(queries)
     else:
         raise SystemExit("Missing query_file parameter!")
 
     if config.paths.proxy_file:
         proxies = get_proxies()
         random.shuffle(proxies)
-        proxy = cycle(proxies) if len(proxies) <= MAX_WORKERS else iter(proxies)
+        proxy = cycle(proxies)
     else:
         raise SystemExit("Missing proxy_file parameter!")
 
