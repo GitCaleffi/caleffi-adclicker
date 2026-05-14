@@ -611,9 +611,22 @@ class SearchController:
 
             else:
                 commercial_unit_container = self._driver.find_element(By.CLASS_NAME, "cu-container")
+
+                # Scorri il carosello per trovare più ads
+                try:
+                    scroll_container = commercial_unit_container.find_element(By.CSS_SELECTOR, ".pla-unit-container, g-scrolling-carousel, [role='list']")
+                    for _ in range(3):
+                        self._driver.execute_script("arguments[0].scrollLeft += 300;", scroll_container)
+                        from time import sleep as _sleep; _sleep(0.4)
+                except Exception:
+                    try:
+                        self._driver.execute_script("arguments[0].scrollLeft += 900;", commercial_unit_container)
+                    except Exception:
+                        pass
+
                 shopping_ads = commercial_unit_container.find_elements(By.CLASS_NAME, "pla-unit")
 
-                for shopping_ad in shopping_ads[:5]:
+                for shopping_ad in shopping_ads[:10]:
                     ad = shopping_ad.find_element(By.TAG_NAME, "a")
                     shopping_ad_link = ad.get_attribute("href")
 
@@ -787,7 +800,11 @@ class SearchController:
 
         for ad in filtered_ads:
             ad_link = ad.get_attribute("href")
-            ad_title = ad.find_element(*self.AD_TITLE).text
+            try:
+                ad_title = ad.find_element(*self.AD_TITLE).text
+            except Exception:
+                logger.debug(f"Skipping ad without title: {ad_link}")
+                continue
             logger.debug(f"Ad title: {ad_title}, Ad link: {ad_link}")
 
             if self._exclude_list:
