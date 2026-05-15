@@ -13,7 +13,7 @@ logger.setLevel(logging.DEBUG)
 # Create handlers
 console_handler = logging.StreamHandler()
 file_handler = RotatingFileHandler(
-    LOG_FILENAME, maxBytes=20971520, encoding="utf-8", backupCount=50
+    LOG_FILENAME, maxBytes=20971520, encoding="utf-8", backupCount=50, delay=True
 )
 console_handler.setLevel(logging.INFO)
 file_handler.setLevel(logging.DEBUG)
