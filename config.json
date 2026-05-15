@@ -22,7 +22,7 @@
         "ad_page_max_wait": 12,
         "nonad_page_min_wait": 10,
         "nonad_page_max_wait": 14,
-        "max_scroll_limit": 0,
+        "max_scroll_limit": 5,
         "check_shopping_ads": false,
         "shopping_exclude_words": "ebay,trovaprezzi,idealo,kelkoo,shopmania,pricespy,caleffi,mirabello",
         "excludes": "caleffionline.it,mirabellocarrara.it,amazon.it",

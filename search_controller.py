@@ -756,7 +756,7 @@ class SearchController:
                     break
 
             self._driver.find_element(By.TAG_NAME, "body").send_keys(Keys.PAGE_DOWN)
-            sleep(get_random_sleep(2, 2.5) * config.behavior.wait_factor)
+            sleep(get_random_sleep(0.7, 1.0) * config.behavior.wait_factor)
 
             scroll_count += 1
 
