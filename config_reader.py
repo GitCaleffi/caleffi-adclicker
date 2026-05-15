@@ -52,6 +52,7 @@ class BehaviorParams:
     telegram_enabled: Optional[bool] = False
     send_to_android: Optional[bool] = False
     request_boost: Optional[bool] = False
+    click_non_ads: Optional[bool] = True
 
 
 class ConfigReader:
@@ -125,6 +126,7 @@ class ConfigReader:
             telegram_enabled=config["behavior"]["telegram_enabled"],
             send_to_android=config["behavior"]["send_to_android"],
             request_boost=config["behavior"]["request_boost"],
+            click_non_ads=config["behavior"].get("click_non_ads", True),
         )
 
 

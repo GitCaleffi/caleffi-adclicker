@@ -270,6 +270,10 @@ def main():
                 if config.behavior.telegram_enabled:
                     notify_matching_ads(query, links=None, stats=search_controller.stats)
             else:
+                if not config.behavior.click_non_ads:
+                    non_ad_links = []
+                    logger.debug("click_non_ads is disabled, skipping non-ad links")
+
                 logger.debug(f"Selected click order: {config.behavior.click_order}")
 
                 if config.behavior.click_order == 1:
