@@ -1,7 +1,7 @@
 {
     "paths": {
-        "query_file": "C:/Users/HP/OneDrive - CALEFFI SPA/Desktop/scraping/crawl/queries general.txt",
-        "proxy_file": "C:/Users/HP/OneDrive - CALEFFI SPA/Desktop/scraping/crawl/proxies.txt",
+        "query_file": "queries caleffi.txt",
+        "proxy_file": "proxies.txt",
         "user_agents": "user_agents.txt",
         "filtered_domains": "domains.txt"
     },

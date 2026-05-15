@@ -117,7 +117,8 @@ def main() -> None:
         random.shuffle(proxies)
         proxy = cycle(proxies)
     else:
-        raise SystemExit("Missing proxy_file parameter!")
+        logger.info("No proxy file configured, running without proxy...")
+        proxy = cycle([""])
 
     if config.behavior.send_to_android:
         adb_controller.get_connected_devices()

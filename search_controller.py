@@ -211,7 +211,12 @@ class SearchController:
                     shopping_ad_links = self._get_shopping_ad_links()
 
                 ad_links = self._get_ad_links()
-                non_ad_links = self._get_non_ad_links(ad_links, non_ad_domains)
+
+                if config.behavior.click_non_ads:
+                    non_ad_links = self._get_non_ad_links(ad_links, non_ad_domains)
+                else:
+                    logger.debug("click_non_ads disabled, skipping non-ad link collection")
+                    non_ad_links = []
 
         except TimeoutException:
             logger.error("Timed out waiting for results!")
